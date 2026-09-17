@@ -1,0 +1,93 @@
+{
+  "name": "7colors-vscode",
+  "displayName": "7Colors 你 vs 机器人",
+  "description": "VS Code 里的 7Colors 染色对战小游戏（侧栏入口 + 难度树 + Webview 棋盘）",
+  "version": "0.1.0",
+  "publisher": "zhanwangfeng",
+  "license": "MIT",
+  "icon": "resources/icon.png",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other",
+    "Games"
+  ],
+  "keywords": [
+    "7colors",
+    "game",
+    "染色",
+    "对战",
+    "游戏"
+  ],
+  "files": [
+    "out",
+    "resources",
+    "src/webview",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "activationEvents": [
+    "onView:sevenColors.diff",
+    "onCommand:sevenColors.open"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "sevenColors",
+          "title": "7Colors",
+          "icon": "resources/icon.png"
+        }
+      ]
+    },
+    "views": {
+      "sevenColors": [
+        {
+          "id": "sevenColors.diff",
+          "name": "难度",
+          "icon": "resources/icon.png",
+          "contextualTitle": "7Colors"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "sevenColors.open",
+        "title": "7Colors: 打开游戏"
+      },
+      {
+        "command": "sevenColors.restart",
+        "title": "7Colors: 重开一局"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "sevenColors.open",
+          "when": "view == sevenColors.diff",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc --noEmit -p ./ && esbuild src/extension.ts --bundle --platform=node --target=node16 --outfile=out/extension.js --external:vscode",
+    "watch": "tsc --noEmit -p ./ & esbuild src/extension.ts --bundle --platform=node --target=node16 --outfile=out/extension.js --external:vscode --watch",
+    "package": "vsce package --out release/7colors-vscode.vsix"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.9.2",
+    "esbuild": "^0.23.1",
+    "typescript": "^5.3.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zhanwangfeng/7ColorsForVSCode.git"
+  }
+}
