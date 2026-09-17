@@ -4,9 +4,8 @@ node_modules/
 # 编译产物（由 npm run compile / vscode:prepublish 生成）
 out/
 
-# 打包产物
+# 打包产物（含版本号，输出到根目录）
 *.vsix
-release/
 
 # 集成测试（启用 @vscode/test-electron 时产生）
 .vscode-test/

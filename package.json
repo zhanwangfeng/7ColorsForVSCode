@@ -1,8 +1,8 @@
 {
   "name": "7colors-vscode",
-  "displayName": "7Colors 你 vs 机器人",
+  "displayName": "7Colors",
   "description": "VS Code 里的 7Colors 染色对战小游戏（侧栏入口 + 难度树 + Webview 棋盘）",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "zhanwangfeng",
   "license": "MIT",
   "icon": "resources/icon.png",
@@ -10,8 +10,7 @@
     "vscode": "^1.85.0"
   },
   "categories": [
-    "Other",
-    "Games"
+    "Other"
   ],
   "keywords": [
     "7colors",
@@ -77,7 +76,7 @@
     "vscode:prepublish": "npm run compile",
     "compile": "tsc --noEmit -p ./ && esbuild src/extension.ts --bundle --platform=node --target=node16 --outfile=out/extension.js --external:vscode",
     "watch": "tsc --noEmit -p ./ & esbuild src/extension.ts --bundle --platform=node --target=node16 --outfile=out/extension.js --external:vscode --watch",
-    "package": "vsce package --out release/7colors-vscode.vsix"
+    "package": "vsce package"
   },
   "devDependencies": {
     "@types/node": "^26.2.0",
