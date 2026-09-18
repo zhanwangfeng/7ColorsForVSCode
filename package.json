@@ -1,8 +1,8 @@
 {
   "name": "7colors-vscode",
   "displayName": "7Colors",
-  "description": "VS Code 里的 7Colors 染色对战小游戏（侧栏入口 + 难度树 + Webview 棋盘）",
-  "version": "0.1.1",
+  "description": "VS Code 里的 7Colors 染色对战小游戏：挑战简单 / 普通 / 困难三档难度，与 AI 轮流选色扩张领地，占地多者获胜。",
+  "version": "0.1.2",
   "publisher": "zhanwangfeng",
   "license": "MIT",
   "icon": "resources/icon.png",
