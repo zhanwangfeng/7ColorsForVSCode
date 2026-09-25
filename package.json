@@ -2,7 +2,7 @@
   "name": "7colors-vscode",
   "displayName": "7Colors",
   "description": "VS Code 里的 7Colors 染色对战小游戏：挑战简单 / 普通 / 困难三档难度，与 AI 轮流选色扩张领地，占地多者获胜。",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "publisher": "zhanwangfeng",
   "license": "MIT",
   "icon": "resources/icon.png",
@@ -29,7 +29,11 @@
   ],
   "activationEvents": [
     "onView:sevenColors.diff",
-    "onCommand:sevenColors.open"
+    "onCommand:sevenColors.open",
+    "onCommand:sevenColors.multiCreate",
+    "onCommand:sevenColors.multiJoin",
+    "onCommand:sevenColors.setNickname",
+    "onCommand:sevenColors.toggleSound"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -46,7 +50,7 @@
       "sevenColors": [
         {
           "id": "sevenColors.diff",
-          "name": "难度",
+          "name": "游戏",
           "icon": "resources/icon.png",
           "contextualTitle": "7Colors"
         }
@@ -60,6 +64,22 @@
       {
         "command": "sevenColors.restart",
         "title": "7Colors: 重开一局"
+      },
+      {
+        "command": "sevenColors.multiCreate",
+        "title": "7Colors: 创建联机房间"
+      },
+      {
+        "command": "sevenColors.multiJoin",
+        "title": "7Colors: 加入联机房间"
+      },
+      {
+        "command": "sevenColors.setNickname",
+        "title": "7Colors: 设定联机昵称"
+      },
+      {
+        "command": "sevenColors.toggleSound",
+        "title": "7Colors: 切换音效"
       }
     ],
     "menus": {
@@ -78,9 +98,13 @@
     "watch": "tsc --noEmit -p ./ & esbuild src/extension.ts --bundle --platform=node --target=node16 --outfile=out/extension.js --external:vscode --watch",
     "package": "vsce package"
   },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
   "devDependencies": {
     "@types/node": "^26.2.0",
     "@types/vscode": "^1.85.0",
+    "@types/ws": "^8.5.0",
     "@vscode/vsce": "^3.9.2",
     "esbuild": "^0.23.1",
     "typescript": "^5.3.3"

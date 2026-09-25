@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>7Colors 你 vs 机器人</title>
+<title>7Colors 联机对战</title>
 <style>
   :root{
     --bg:#0f1320; --panel:#171c2b; --card:#1d2436; --ink:#eef2ff; --muted:#9aa6c4;
@@ -39,7 +39,7 @@
   .cell{aspect-ratio:1; border-radius:3px; background:#222; transition:background .08s, transform .16s;}
   .cell.invalid{background:transparent !important;}
   /* 与基地连通的领地：不放大，通过 canvas 在相邻格之间「填充缝隙」连成一体（中立格保持 2px 间隙） */
-  /* 基地：正常显示，仅保留居中的文字标签（你 / AI） */
+  /* 基地：正常显示，仅保留居中的文字标签（你 / 对手） */
   .cell.base-p,.cell.base-a{
     display:flex; align-items:center; justify-content:center;
     font-size:9px; font-weight:800; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.6);
@@ -73,6 +73,8 @@
   }
   .palette button.nogain{opacity:.55;}
   .hint{color:var(--muted); font-size:12px; margin-top:10px; text-align:center; line-height:1.7;}
+  .room{width:100%; max-width:520px; margin:12px auto 0; font-size:13px; color:var(--muted); text-align:center; word-break:break-all; line-height:1.7;}
+  .room b{color:var(--accent); font-weight:700;}
   kbd{background:var(--card); border:1px solid var(--line); border-radius:5px; padding:1px 6px; font-size:11px;}
 
   .overlay{position:fixed; inset:0; background:rgba(8,10,18,.72); display:none; align-items:center; justify-content:center; z-index:10;}
@@ -86,29 +88,43 @@
 </head>
 <body>
   <h1>7Colors <span class="dots" id="heroDots"></span></h1>
-  <p class="sub">把地图染成你的颜色，吞并相邻同色格。地图全部被占据时，占地多者胜。</p>
+  <p class="sub">与同一局域网内的好友联机对战：轮流选色扩张领地，地图全部被占据时占地多者胜。</p>
 
   <div class="topbar">
-    <div class="diff-label" id="diffLabel">难度：<b>普通</b></div>
-    <button class="btn" id="restart">重开一局</button>
-    <div class="status" id="status">轮到你了</div>
+    <div class="diff-label" id="diffLabel">联机</div>
+    <button class="btn" id="restart" style="display:none">重开一局</button>
+    <div class="status" id="status">正在准备…</div>
   </div>
 
   <div class="board-wrap"><div id="board"></div><canvas id="links"></canvas></div>
 
+  <div class="room" id="room"></div>
+
   <div class="palette" id="palette"></div>
   <p class="hint">
-    <b>无缝连片的高亮格 = 与基地连通的领地</b>，<b>带间隙的独立小格 = 中立</b>（未连通，可随时被吞并）。<b>标「你 / AI」的格 = 基地</b>。扩散动画从基地向外辐射。<br>
+    <b>无缝连片的高亮格 = 与基地连通的领地</b>，<b>带间隙的独立小格 = 中立</b>（未连通，可随时被吞并）。<b>标「你 / 对手」的格 = 基地</b>。扩散动画从基地向外辐射。<br>
     灰显按钮 = 与某方基地同色（禁用）；半透明按钮 = 该色已无可吞并格。快捷键 <kbd>1</kbd>–<kbd>7</kbd> 选色，<kbd>R</kbd> 重开。
   </p>
 
   <div class="overlay" id="overlay"><div class="modal">
     <h2 id="result">—</h2>
     <p class="big" id="resultDetail"></p>
-    <button class="btn" id="again">再来一局</button>
+    <button class="btn" id="again">关闭</button>
   </div></div>
 
 <script>
+// common 的 lan-multiplayer 会把 __MULTI_BOOTSTRAP_VALUE__ 替换成注入的 JSON
+const BOOTSTRAP = __MULTI_BOOTSTRAP_VALUE__;
+const ROLE = BOOTSTRAP.role;                                  // 'host' | 'client'
+let myName = (BOOTSTRAP.nickname || '玩家').toString().slice(0, 12);
+let oppName = '对手';
+const vscode = acquireVsCodeApi();
+function send(msg){ vscode.postMessage(msg); }
+function updateNames(){
+  cellEls[pBase].textContent = myName;
+  cellEls[aBase].textContent = oppName;
+}
+
 const SIZE=21, C=10;
 const COLORS=[
   {id:0,name:'红',hex:'#e8503a'},
@@ -135,11 +151,11 @@ const neighbors4 = i => {
 
 // 状态
 let grid, playerRegion, aiRegion, playerColor, aiColor;
-let turn, locked, over, winner, difficulty='normal';
+let turn, locked, over, winner, difficulty='normal', peerJoined=false;
 
 document.getElementById('heroDots').innerHTML = COLORS.map(c=>`<i style="background:${c.hex}"></i>`).join('');
 
-// 棋盘 DOM
+// 棋盘 DOM（含四角 invalid 透明占位，自然形成菱形）
 const board=document.getElementById('board');
 const cellEls=[];
 for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++){
@@ -150,8 +166,8 @@ for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++){
   cellEls.push(d); board.appendChild(d);
 }
 const pBase=idx(SIZE-1,C), aBase=idx(0,C);
-cellEls[pBase].classList.add('base-p'); cellEls[pBase].textContent='你';
-cellEls[aBase].classList.add('base-a'); cellEls[aBase].textContent='AI';
+cellEls[pBase].classList.add('base-p'); cellEls[pBase].textContent=myName;
+cellEls[aBase].classList.add('base-a'); cellEls[aBase].textContent=oppName;
 
 // 缝隙填充层：仅在相邻「连通」格之间绘制同色色条，填满 2px 间隙；与中立格的边界保持间隙
 const links=document.getElementById('links');
@@ -211,24 +227,55 @@ function markAll(){
   for(const i of aiRegion)     if(i!==aBase) cellEls[i].classList.add('theirs');
 }
 
-function init(){
+// 随机生成棋盘（房主权威）
+function genGrid(){
   grid=new Int8Array(SIZE*SIZE).fill(-1);
   for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++) if(valid(r,c)) grid[idx(r,c)]=(Math.random()*7)|0;
   // 基地异色
   let pc=grid[pBase], ac=grid[aBase];
   if(pc===ac){ pc=(pc+1+((Math.random()*6)|0))%7; grid[pBase]=pc; }
+  return {pc, ac};
+}
+// 基于当前 grid 完成局面布置（双方通用）
+function setupBoard(pc, ac){
   playerColor=pc; aiColor=ac;
   playerRegion=new Set([pBase]); aiRegion=new Set([aBase]);
   floodInit(playerRegion); floodInit(aiRegion);
-  turn='player'; locked=false; over=false; winner=null;
+  turn='player'; locked=false;   over=false; winner=null;
   document.getElementById('overlay').classList.remove('show');
+  if(ROLE==='host') document.getElementById('restart').style.display='none';  // 游戏中隐藏，结束后才显示
   for(let i=0;i<SIZE*SIZE;i++) if(grid[i]>=0) paintCell(i);
   markAll();
   setupLinks();
   drawLinks();
   clearPreview();
   diffColors();
-  showDifficulty();
+}
+// 房主开局：生成并广播棋盘
+function init(){
+  const {pc,ac}=genGrid();
+  setupBoard(pc,ac);
+  if(ROLE==='host') send({type:'start', grid: Array.from(grid), name: myName});
+}
+// 客机开局：加载房主下发的棋盘，后手
+// 注意：房主下发的棋盘里 pBase=房主基地(下)、aBase=客机基地(上)。
+// 客机需将棋盘沿上下中线翻转，使“自己的基地”落在下方、地形与房主视角互为上下镜像，
+// 否则双方会都从同一处(pBase)扩张、颜色互相覆盖，逻辑上不成立。
+function mirrorGrid(g){
+  const out = new Int8Array(SIZE*SIZE);
+  for(let i=0;i<SIZE*SIZE;i++){
+    const r=(i/SIZE)|0, c=i%SIZE;
+    out[idx(SIZE-1-r, c)] = g[i];
+  }
+  return out;
+}
+function loadBoard(g){
+  g = mirrorGrid(g);              // 客机上下镜像，保证双方逻辑对称
+  grid=Int8Array.from(g);
+  const pc=grid[pBase], ac=grid[aBase];
+  setupBoard(pc,ac);
+  turn='opponent'; locked=true;
+  send({type:'hello', name: myName});
 }
 
 function floodInit(region){
@@ -296,7 +343,7 @@ function animateMove(side, target, done){
   setTimeout(()=>{ drawLinks(); done(); }, maxDepth*42 + 110);
 }
 
-// 模拟（AI 评估用）
+// 模拟（AI 评估用；联机未使用，保留以保持逻辑一致）
 function cloneState(){ return {grid:grid.slice(), playerRegion:new Set(playerRegion), aiRegion:new Set(aiRegion)}; }
 function simGain(state, side, target){
   const region = side===1?state.playerRegion:state.aiRegion;
@@ -353,15 +400,25 @@ function endGame(){
   over=true; locked=true;
   const p=playerRegion.size, a=aiRegion.size;
   winner = p>a?1 : (a>p?2 : 0);
-  document.getElementById('result').textContent = winner===1?'你赢了！' : winner===2?'机器人赢了' : '平局';
-  document.getElementById('resultDetail').textContent = `你的领地 ${p} 格 · 机器人 ${a} 格`;
+  const resTxt = winner===1?'你赢了！' : winner===2?'对手赢了' : '平局';
+  const det = `你的领地 ${p} 格 · 对手 ${a} 格`;
+  // 双方都弹结算框（按钮为「关闭」），展示本局结果
+  document.getElementById('result').textContent = resTxt;
+  document.getElementById('resultDetail').textContent = det;
   document.getElementById('overlay').classList.add('show');
+  if(ROLE==='host'){
+    // 房主：游戏结束后在地图上方显示「重开一局」
+    document.getElementById('restart').style.display='';
+    document.getElementById('status').textContent = resTxt + ' · ' + det + ' — 点「重开一局」再来一局';
+  } else {
+    document.getElementById('status').textContent = resTxt + ' · ' + det + ' — 等待房主重开';
+  }
   if(winner===1) sndWin(); else if(winner===2) sndLose(); else sndDraw();
 }
 
 // ============ 音效（Web Audio 合成，无需音频文件） ============
 let audioCtx = null;
-let soundOn = true;
+let soundOn = BOOTSTRAP.soundOn !== false;
 function ensureAudio(){
   if(!audioCtx){
     const AC = window.AudioContext || window.webkitAudioContext;
@@ -398,7 +455,7 @@ function diffColors(){
   const p=playerRegion.size, a=aiRegion.size, total=221;
 
   const st=document.getElementById('status');
-  st.innerHTML = `你 <b>${p}</b> · AI <b>${a}</b> · 中立 <b>${total-p-a}</b>` + (turn==='player'?' · 轮到你':'');
+  st.innerHTML = `你(${myName}) <b>${p}</b> · 对手(${oppName}) <b>${a}</b> · 中立 <b>${total-p-a}</b>` + (turn==='player'?' · 轮到你':(turn==='opponent'?' · 等待对手…':''));
 
   const pal=document.getElementById('palette'); pal.innerHTML='';
   for(const col of COLORS){
@@ -419,43 +476,119 @@ function onPlayerPick(c){
   if(c===playerColor||c===aiColor) return;
   clearPreview();
   ensureAudio(); sndMove(1);
-  locked=true; turn='ai';
-  document.getElementById('status').textContent='你走完，AI 思考中…';
+  locked=true; turn='opponent';
+  document.getElementById('status').textContent='你走完，等待对手…';
   animateMove(1, c, ()=>{
     diffColors();
+    send({type:'move', color:c});   // 这一步必须发给对端；决胜步也要发，否则对方永远收不到终局、一直等待
     if(checkEnd()){ endGame(); return; }
-    setTimeout(()=>{
-      const ac=aiChoose();
-      sndMove(2);
-      animateMove(2, ac, ()=>{
-        diffColors();
-        if(checkEnd()){ endGame(); return; }
-        turn='player'; locked=false; diffColors();
-      });
-    }, 380);
+  });
+}
+function opponentMove(c){
+  if(over) return;
+  if(turn!=='opponent') return;
+  sndMove(2);
+  animateMove(2, c, ()=>{
+    diffColors();
+    if(checkEnd()){ endGame(); return; }
+    turn='player'; locked=false; diffColors();
   });
 }
 
 // 重开 / 快捷键（难度通过扩展侧 TreeView 选择，webview 内只读展示）
-
 function showDifficulty(){
   const map={easy:'简单', normal:'普通', hard:'困难'};
   const el=document.getElementById('diffLabel');
   if(el) el.innerHTML='难度：<b>'+(map[difficulty]||difficulty)+'</b>';
 }
-document.getElementById('restart').onclick=init;
-document.getElementById('again').onclick=init;
-// 接收来自扩展（TreeView「音效开关」）的音量状态，同时控制单机音效
-window.addEventListener('message', e => {
-  if (e.data && e.data.type === 'setSound') { soundOn = !!e.data.on; if(soundOn) ensureAudio(); }
-});
+function onRestart(){
+  if(ROLE==='host'){
+    if(peerJoined) init();          // 仅在对手已加入时才可开局 / 重开
+    else document.getElementById('status').textContent='等待对手加入房间…';
+  } else {
+    send({type:'restart'});         // 客机请求房主重建
+  }
+}
+document.getElementById('again').onclick=()=>document.getElementById('overlay').classList.remove('show');
+document.getElementById('restart').onclick=onRestart;
 window.addEventListener('keydown', e=>{
   if(e.key>='1'&&e.key<='7'){ onPlayerPick(+e.key-1); }
-  else if(e.key==='r'||e.key==='R'){ init(); }
+  else if((e.key==='r'||e.key==='R') && ROLE==='host' && over){ onRestart(); }
 });
-window.addEventListener('resize', ()=>{ setupLinks(); drawLinks(); });
+window.addEventListener('resize', ()=>{ if(playerRegion){ setupLinks(); drawLinks(); } });
 
-init();
+// ============ 联机消息（来自 extension / 网络） ============
+window.addEventListener('message', (e)=>{
+  const m = e.data;
+  if(!m || typeof m!=='object') return;
+  switch(m.type){
+    case 'hostReady':                // 房主：服务已监听，展示本机地址
+      document.getElementById('status').textContent='等待对手加入房间…';
+      document.getElementById('room').innerHTML='房间地址：<b>'+m.host+':'+m.port+'</b>（让好友输入此地址加入）';
+      break;
+    case 'hostError':                // 房主：开启失败
+      document.getElementById('status').textContent='房间开启失败：'+(m.message||'端口可能被占用');
+      document.getElementById('room').textContent='';
+      break;
+    case 'peerConnected':            // 房主：客机加入
+      peerJoined = true;
+      init();
+      break;
+    case 'clientConnected':          // 客机：已连上房主
+      document.getElementById('status').textContent='已连接，等待房主开始…';
+      break;
+    case 'clientTimeout':
+    case 'clientRefused':
+    case 'clientError':              // 客机：连接房主失败
+      document.getElementById('status').textContent='连接房主失败：'+(m.message||'请检查 IP 与端口，并确认房主已创建房间');
+      break;
+    case 'peerDisconnected':
+    case 'clientDisconnected':
+      peerJoined = false;
+      over=true; locked=true;
+      document.getElementById('status').textContent='对手已断开连接';
+      break;
+    case 'start':                    // 客机：房主下发棋盘
+      oppName = m.name || oppName;
+      updateNames();
+      loadBoard(m.grid);
+      document.getElementById('status').textContent='联机对战中…';
+      break;
+    case 'move':                     // 收到对端的一步
+      opponentMove(m.color);
+      break;
+    case 'hello':                    // 对端昵称
+      oppName = m.name || oppName;
+      updateNames();
+      break;
+    case 'restart':                  // 客机请求重开，房主负责重建棋盘
+      if(ROLE==='host') init();
+      break;
+    case 'setNick':                  // 来自 TreeView 的昵称更新
+      myName = (m.name || myName).toString().slice(0, 12);
+      updateNames();
+      diffColors();
+      send({type:'hello', name: myName});
+      break;
+    case 'setSound':                 // 来自 TreeView 的音效开关（同时控制单机/联机，直达 webview）
+      soundOn = !!m.on;
+      break;
+  }
+});
+
+// 联机：不在此初始化棋盘，等待对端连接 / 下发棋盘
+document.getElementById('diffLabel').innerHTML = '联机 · <b>' + (ROLE==='host'?'房主':'客机') + '</b>';
+if(ROLE==='host'){
+  // 先用 bootstrap 里的本机 IP 与端口显示（hostReady 到达后会再次刷新为同一地址）
+  const la = BOOTSTRAP.localIp, lp = BOOTSTRAP.port;
+  document.getElementById('status').textContent='正在开启房间…';
+  document.getElementById('room').innerHTML = la
+    ? ('房间地址：<b>'+la+':'+lp+'</b>（让好友输入此地址加入）')
+    : ('本机房间已开启（端口 '+lp+'），请查看本机局域网 IP 后告知好友');
+} else {
+  document.getElementById('status').textContent='正在连接房主…';
+  document.getElementById('room').textContent='请用「加入房间」输入房主提供的 IP:端口';
+}
 
 </script>
 </body>
